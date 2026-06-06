@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>스케치 고! 우리 동네</title>
+    <style>
+        /* 기본 스타일 초기화 */
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+        body, html { width: 100%; height: 100%; background-color: #222; display: flex; justify-content: center; align-items: center; overflow: hidden; font-family: 'Arial', sans-serif; }
+        
+        #game-container {
+            width: 1280px;
+            height: 720px;
+            position: relative;
+            background-color: #4E7730; /* 기본 잔디밭 색상 */
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            overflow: hidden;
+        }
+
+        /* 1. 오프닝 대기 화면 (Image 3 배경 적용) */
+        #title-screen {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image: url('main.png'); /* 따뜻한 손그림 배경 */
+            background-size: cover;
+            background-position: center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            transition: opacity 0.5s ease-out;
+        }
+
+        /* 중앙 타이틀 로고 (Image 2 적용) */
+        #title-logo {
+            position: absolute;
+            width: 700px;
+            height: auto;
+            top: 25%; /* 약간 위쪽에 배치 */
+            left: 50%;
+            transform: translate(-50%, -50%);
+            animation: bounce 1.5s infinite alternate ease-in-out;
+        }
+
+        /* 시작하기 버튼 (중앙에서 약간 위쪽에 정확히 배치) */
+        #start-button {
+            position: absolute;
+            left: 50%;
+            top: 45%; /* 요구하신 대로 정중앙(50%)보다 약간 위쪽 영역 */
+            transform: translate(-50%, -50%);
+            padding: 18px 50px;
+            font-size: 26px;
+            font-weight: bold;
+            color: #333;
+            background: linear-gradient(135deg, #FFEB3B, #FFC107);
+            border: 4px solid #333;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 6px 15px rgba(0,0,0,0.3);
+            transition: all 0.2s ease;
+            z-index: 11;
+        }
+        #start-button:hover {
+            transform: translate(-50%, -55%) scale(1.05);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.4);
+        }
+
+        /* 2. 실제 플레이 화면 */
+        #play-screen {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: none;
+            background-color: #4E7730; /* 실제 놀이판은 깨끗한 잔디색 배경 */
+        }
+
+        /* 왼쪽 에셋 바 (탭 선택 기능) */
+        #sidebar {
+            position: absolute;
+            left: 20px;
+            top: 20px;
+            width: 240px;
+            height: 680px;
+            background: rgba(255, 255, 255, 0.95);
+            border: 3px solid #333;
+            border-radius: 15px;
+            display: flex;
+            flex-direction: column;
+            z-index: 5;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        .tab-menu {
+            display: flex;
+            background: #e0e0e0;
+            border-top-left-radius: 11px;
+            border-top-right-radius: 11px;
+            border-bottom: 2px solid #333;
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 12px 2px;
+            font-size: 13px;
+            font-weight: bold;
+            border: none;
+            background: none;
+            cursor: pointer;
+            color: #555;
+            transition: background 0.2s;
+        }
+        .tab-btn.active {
+            background: white;
+            color: #111;
+            border-top-left-radius: 11px;
+            border-top-right-radius: 11px;
+        }
+        #asset-list {
+            flex: 1;
+            padding: 12px;
+            overflow-y: auto;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            align-content: start;
+        }
+        .sidebar-item {
+            width: 100%;
+            aspect-ratio: 1/1;
+            border: 2px dashed #999;
+            border-radius: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: grab;
+            background: white;
+            padding: 6px;
+            transition: transform 0.1s;
+        }
+        .sidebar-item:hover { transform: scale(1.05); }
+        .sidebar-item img {
+            max-width: 100%;
+            max-height: 100%;
+            pointer-events: none;
+        }
+
+        /* 중앙 지도 캔버스 영역 */
+        #map-canvas {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+        }
+
+        /* 지도에 배치된 오브젝트 공통 스타일 */
+        .placed-object {
+            position: absolute;
+            cursor: move;
+            transform-origin: bottom center;
+            transition: transform 0.1s ease;
+        }
+        .placed-object img {
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        /* 도로 조각은 잔디 위에 150x150 격자로 놓이게 설정 */
+        .placed-road {
+            position: absolute;
+            width: 150px;
+            height: 150px;
+            cursor: move;
+            z-index: 1;
+        }
+        .placed-road img {
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        /* 미니 컨트롤러 (회전, 반전, 삭제) */
+        .control-panel {
+            position: absolute;
+            top: -45px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            background: white;
+            border: 2px solid #333;
+            border-radius: 8px;
+            padding: 3px;
+            gap: 5px;
+            z-index: 100;
+        }
+        .control-btn {
+            width: 26px;
+            height: 26px;
+            font-size: 14px;
+            border: none;
+            border-radius: 4px;
+            background: #eee;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .control-btn:hover { background: #ddd; }
+
+        /* 신호등 조절기 */
+        #traffic-light-controller {
+            position: absolute;
+            right: 20px;
+            bottom: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            border: 3px solid #333;
+            border-radius: 50px;
+            padding: 10px 25px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            z-index: 5;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        .controller-title { font-weight: bold; font-size: 14px; color: #333; }
+        .light-btn {
+            padding: 8px 20px;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 20px;
+            border: 2px solid #333;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        #btn-red { background: #FFCDD2; color: #C62828; }
+        #btn-red.active { background: #E53935; color: white; box-shadow: 0 0 10px #E53935; }
+        #btn-green { background: #C8E6C9; color: #2E7D32; }
+        #btn-green.active { background: #43A047; color: white; box-shadow: 0 0 10px #43A047; }
+
+        /* 애니메이션 */
+        @keyframes bounce {
+            0% { transform: translate(-50%, -50%) scale(1); }
+            100% { transform: translate(-50%, -50%) scale(1.03) translateY(-5px); }
+        }
+        @keyframes wiggle {
+            0%, 100% { transform: rotate(-5deg); }
+            50% { transform: rotate(5deg); }
+        }
+        @keyframes mini-bounce {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.04) translateY(-4px); }
+        }
+
+        /* 모드 전환 시 애니메이션 적용 */
+        .play-mode .character-wiggle {
+            animation: wiggle 0.5s infinite alternate ease-in-out;
+        }
+        .play-mode .vehicle-bounce {
+            animation: mini-bounce 0.4s infinite alternate ease-in-out;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <!-- 1. 오프닝 대기 화면 -->
+    <div id="title-screen">
+        <img id="title-logo" src="title.png" alt="스케치고! 우리 동네">
+        <button id="start-button" onclick="startGame()">동네 만들기 출발! 🚦</button>
+    </div>
+
+    <!-- 2. 실제 플레이 화면 -->
+    <div id="play-screen">
+        <div id="map-canvas" ondragover="allowDrop(event)" ondrop="drop(event)"></div>
+
+        <div id="sidebar">
+            <div class="tab-menu">
+                <button class="tab-btn active" onclick="switchTab('road')">🛣️ 도로</button>
+                <button class="tab-btn" onclick="switchTab('building')">🏠 건물</button>
+                <button class="tab-btn" onclick="switchTab('decor')">🚗 소품</button>
+            </div>
+            <div id="asset-list"></div>
+        </div>
+
+        <div id="traffic-light-controller">
+            <span class="controller-title">신호등 🚦</span>
+            <button id="btn-red" class="light-btn active" onclick="setMode('edit')">만들기 🔴</button>
+            <button id="btn-green" class="light-btn" onclick="setMode('play')">출발! 🟢</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 1~12번 도로, 1~22번 소품/건물 매핑
+    const assets = {
+        road: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], // roads 폴더 연동
+        building: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 21, 22], // assets 폴더 연동
+        decor: [11, 12, 13, 14, 15, 16, 17, 18, 19, 20] // assets 폴더 연동 (탈것, 사람 포함)
+    };
+
+    let currentTab = 'road';
+    let currentMode = 'edit';
+    let selectedObject = null;
+    const placedObjects = [];
+
+    function startGame() {
+        const title = document.getElementById('title-screen');
+        title.style.opacity = '0';
+        setTimeout(() => {
+            title.style.display = 'none';
+            document.getElementById('play-screen').style.display = 'block';
+            switchTab('road');
+        }, 500);
+    }
+
+    function switchTab(tab) {
+        currentTab = tab;
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        event.currentTarget.classList.add('active');
+        renderAssetList();
+    }
+
+    function renderAssetList() {
+        const listContainer = document.getElementById('asset-list');
+        listContainer.innerHTML = '';
+        
+        assets[currentTab].forEach(num => {
+            const item = document.createElement('div');
+            item.className = 'sidebar-item';
+            item.draggable = true;
+            item.ondragstart = (e) => drag(e, num, currentTab);
+            
+            const img = document.createElement('img');
+            // 도로 탭일 땐 roads 폴더에서, 나머진 assets 폴더에서 로드
+            img.src = currentTab === 'road' ? `roads/${num}.png` : `assets/${num}.png`;
+            img.alt = `에셋 ${num}`;
+            
+            item.appendChild(img);
+            listContainer.appendChild(item);
+        });
+    }
+
+    function drag(ev, num, tab) {
+        ev.dataTransfer.setData("num", num);
+        ev.dataTransfer.setData("tab", tab);
+    }
+
+    function allowDrop(ev) {
+        if (currentMode === 'edit') ev.preventDefault();
+    }
+
+    function drop(ev) {
+        ev.preventDefault();
+        const num = ev.dataTransfer.getData("num");
+        const tab = ev.dataTransfer.getData("tab");
+        const rect = document.getElementById('map-canvas').getBoundingClientRect();
+        
+        const x = ev.clientX - rect.left;
+        const y = ev.clientY - rect.top;
+
+        if (tab === 'road') {
+            createRoad(num, x, y);
+        } else {
+            createObject(num, x, y);
+        }
+    }
+
+    // 도로 조각 드롭 로직 (자석식 그리드 격자 스냅 150px)
+    function createRoad(num, x, y) {
+        const objId = 'road_' + Date.now();
+        const wrapper = document.createElement('div');
+        wrapper.className = 'placed-road';
+        wrapper.id = objId;
+
+        // 150px 격자 단위 자석식 좌표 보정
+        const gridX = Math.round((x - 75) / 150) * 150;
+        const gridY = Math.round((y - 75) / 150) * 150;
+
+        wrapper.style.left = gridX + 'px';
+        wrapper.style.top = gridY + 'px';
+
+        const img = document.createElement('img');
+        img.src = `roads/${num}.png`;
+        wrapper.appendChild(img);
+
+        const roadData = {
+            id: objId,
+            element: wrapper,
+            isRoad: true,
+            rotation: 0,
+            scaleX: 1
+        };
+
+        wrapper.onclick = (e) => {
+            e.stopPropagation();
+            if (currentMode === 'edit') showController(roadData);
+        };
+
+        document.getElementById('map-canvas').appendChild(wrapper);
+        placedObjects.push(roadData);
+    }
+
+    // 일반 오브젝트 배치 로직 (자유 배치)
+    function createObject(num, x, y) {
+        const objId = 'obj_' + Date.now();
+        const wrapper = document.createElement('div');
+        wrapper.className = 'placed-object';
+        wrapper.id = objId;
+        
+        let width = 120; // 기본 크기
+        let isVehicle = [11, 12, 13, 14, 15].includes(Number(num));
+        let isPerson = [19, 20].includes(Number(num));
+
+        if (isVehicle) width = 80;
+        else if (isPerson) width = 50;
+
+        wrapper.style.width = width + 'px';
+        wrapper.style.left = (x - width/2) + 'px';
+        wrapper.style.top = (y - width) + 'px'; // 발끝 정렬
+
+        const img = document.createElement('img');
+        img.src = `assets/${num}.png`;
+        wrapper.appendChild(img);
+
+        const objData = {
+            id: objId,
+            element: wrapper,
+            width: width,
+            rotation: 0,
+            scaleX: 1,
+            isVehicle: isVehicle,
+            isPerson: isPerson,
+            x: x - width/2,
+            y: y - width
+        };
+
+        wrapper.onclick = (e) => {
+            e.stopPropagation();
+            if (currentMode === 'edit') showController(objData);
+        };
+
+        makeDraggable(wrapper, objData);
+        document.getElementById('map-canvas').appendChild(wrapper);
+        placedObjects.push(objData);
+    }
+
+    // 드래그 기능 구현
+    function makeDraggable(elmnt, objData) {
+        let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+        elmnt.onmousedown = dragMouseDown;
+
+        function dragMouseDown(e) {
+            if (currentMode !== 'edit') return;
+            removeController();
+            e = e || window.event;
+            e.preventDefault();
+            pos3 = e.clientX;
+            pos4 = e.clientY;
+            document.onmouseup = closeDragElement;
+            document.onmousemove = elementDrag;
+        }
+
+        function elementDrag(e) {
+            e = e || window.event;
+            e.preventDefault();
+            pos1 = pos3 - e.clientX;
+            pos2 = pos4 - e.clientY;
+            pos3 = e.clientX;
+            pos4 = e.clientY;
+            
+            let newX = elmnt.offsetLeft - pos1;
+            let newY = elmnt.offsetTop - pos2;
+
+            // 경계 이탈 방지
+            if (newX < 0) newX = 0;
+            if (newX > 1280 - objData.width) newX = 1280 - objData.width;
+            if (newY < 0) newY = 0;
+            if (newY > 720 - objData.width) newY = 720 - objData.width;
+
+            elmnt.style.left = newX + "px";
+            elmnt.style.top = newY + "px";
+            objData.x = newX;
+            objData.y = newY;
+        }
+
+        function closeDragElement() {
+            document.onmouseup = null;
+            document.onmousemove = null;
+        }
+    }
+
+    // 미니 컨트롤러 띄우기
+    function showController(objData) {
+        removeController();
+        selectedObject = objData;
+
+        const panel = document.createElement('div');
+        panel.className = 'control-panel';
+        panel.id = 'active-controller';
+
+        // 1. 회전 버튼 ↻
+        const rotateBtn = document.createElement('button');
+        rotateBtn.className = 'control-btn';
+        rotateBtn.innerHTML = '↻';
+        rotateBtn.onclick = () => {
+            objData.rotation = (objData.rotation + 90) % 360;
+            applyTransform(objData);
+        };
+
+        // 2. 좌우 반전 버튼 ↔
+        const flipBtn = document.createElement('button');
+        flipBtn.className = 'control-btn';
+        flipBtn.innerHTML = '↔';
+        flipBtn.onclick = () => {
+            objData.scaleX = objData.scaleX * -1;
+            applyTransform(objData);
+        };
+
+        // 3. 삭제 버튼 🗑️
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'control-btn';
+        deleteBtn.innerHTML = '🗑️';
+        deleteBtn.onclick = () => {
+            objData.element.remove();
+            const idx = placedObjects.findIndex(o => o.id === objData.id);
+            if (idx > -1) placedObjects.splice(idx, 1);
+            removeController();
+        };
+
+        panel.appendChild(rotateBtn);
+        panel.appendChild(flipBtn);
+        panel.appendChild(deleteBtn);
+        objData.element.appendChild(panel);
+    }
+
+    function removeController() {
+        const controller = document.getElementById('active-controller');
+        if (controller) controller.remove();
+        selectedObject = null;
+    }
+
+    function applyTransform(objData) {
+        objData.element.style.transform = `rotate(${objData.rotation}deg) scaleX(${objData.scaleX})`;
+    }
+
+    // 배경 클릭 시 컨트롤러 지우기
+    document.getElementById('map-canvas').onclick = () => {
+        removeController();
+    };
+
+    // 신호등 조작 (만들기 🔴 vs 출발! 🟢)
+    function setMode(mode) {
+        currentMode = mode;
+        removeController();
+
+        document.getElementById('btn-red').classList.remove('active');
+        document.getElementById('btn-green').classList.remove('active');
+
+        if (mode === 'edit') {
+            document.getElementById('btn-red').classList.add('active');
+            document.getElementById('play-screen').classList.remove('play-mode');
+            // 움직임 애니메이션 정지
+            placedObjects.forEach(obj => {
+                if (obj.element.firstChild) {
+                    obj.element.firstChild.className = '';
+                }
+            });
+        } else {
+            document.getElementById('btn-green').classList.add('active');
+            document.getElementById('play-screen').classList.add('play-mode');
+            // 움직임 애니메이션 활성화 (사람은 뒤뚱뒤뚱, 차는 통통)
+            placedObjects.forEach(obj => {
+                const imgEl = obj.element.querySelector('img');
+                if (imgEl) {
+                    if (obj.isPerson) {
+                        imgEl.className = 'character-wiggle';
+                    } else if (obj.isVehicle) {
+                        imgEl.className = 'vehicle-bounce';
+                    }
+                }
+            });
+        }
+    }
+</script>
+
+</body>
+</html>
