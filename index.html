@@ -36,20 +36,28 @@
             overflow: hidden;
         }
 
-        /* ☀️ 손그림 해님의 둥실둥실 맥박 및 느린 자전 회전 애니메이션 (가이드라인 위치 정밀 매핑 완료) */
-        .crayon-sun {
+/* ☀️ 해님 회전 전용 부모 박스 */
+        .sun-wrapper {
             position: absolute;
-            top: 10px; /* 정확한 오버레이 보정 */
-            left: 110px; 
+            top: 10px;
+            left: 110px;
             width: 105px;
-            height: auto;
+            height: 105px;
             pointer-events: none;
             z-index: 11;
             transform-origin: center center;
-            animation: sunPulse 2.5s infinite alternate ease-in-out, rotateSlow 35s infinite linear;
+            animation: rotateSlow 40s infinite linear; /* 회전만 전담 */
         }
 
-        /* ✨ 손그림 별들의 반짝임 애니메이션 (파란 별 가이드선 화살표 위치 완벽 이동) */
+        /* ☀️ 해님 맥박(크기) 전용 이미지 */
+        .crayon-sun {
+            width: 100%;
+            height: auto;
+            transform-origin: center center;
+            animation: sunPulse 2.5s infinite alternate ease-in-out; /* 크기 조절만 전담 */
+        }
+
+        /* ✨ 별 반짝임 공통 스타일 */
         .crayon-star {
             position: absolute;
             height: auto;
@@ -58,9 +66,23 @@
             transform-origin: center center;
             animation: twinkle 1.5s infinite alternate ease-in-out;
         }
-        .star-pink { width: 33px; top: 110px; left: 330px; animation-delay: 0.2s; }
-        .star-yellow { width: 33px; top: 80px; left: 730px; animation-delay: 0.6s; }
-        .star-blue { width: 23px; top: 185px; left: 270px; animation-delay: 1.0s; } /* 요청하신 스케치고! "스" 왼쪽 빈 공간으로 정밀 이동 완료 */
+        .star-pink { width: 33px; top: 110px; left: 330px; animation-delay: 0.1s; }
+        .star-yellow { width: 33px; top: 80px; left: 730px; animation-delay: 0.5s; }
+        .star-blue { width: 23px; top: 185px; left: 270px; animation-delay: 0.9s; }
+
+        /* 🎬 애니메이션 효과 프레임 정의 */
+        @keyframes sunPulse {
+            0% { transform: scale(0.96); }
+            100% { transform: scale(1.06); }
+        }
+        @keyframes rotateSlow {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        @keyframes twinkle {
+            0% { transform: scale(0.82) rotate(-5deg); opacity: 0.35; }
+            100% { transform: scale(1.18) rotate(10deg); opacity: 1; }
+        }
 
         /* 시작하기 버튼 (글씨 틈새 공간 안으로 쏙 들어가도록 세로축 및 크기 조절 완료) */
         #start-button {
@@ -471,12 +493,14 @@
 <body>
 
 <div id="game-container">
-    <!-- 1. 오프닝 대기 화면 (해님과 반짝이는 아날로그 별들 애니메이션 탑재) -->
+<!-- 1. 오프닝 대기 화면 -->
     <div id="title-screen">
-        <!-- ☀️ 새로 오려낸 색연필 해님 에셋 -->
-        <img class="crayon-sun" src="sun.png" alt="해님">
+        <!-- ☀️ 부모-자식 구조로 분리하여 회전과 맥박 축이 충돌하지 않는 해님 에셋 -->
+        <div class="sun-wrapper">
+            <img class="crayon-sun" src="sun.png" alt="해님">
+        </div>
 
-        <!-- ✨ 새로 오려낸 색연필 반짝이 별 에셋들 -->
+        <!-- ✨ 개별적으로 반짝반짝 빛나는 별 에셋들 -->
         <img class="crayon-star star-pink" src="star_pink.png" alt="핑크별">
         <img class="crayon-star star-yellow" src="star_yellow.png" alt="노랑별">
         <img class="crayon-star star-blue" src="star_blue.png" alt="파랑별">
