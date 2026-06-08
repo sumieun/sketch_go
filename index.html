@@ -1410,7 +1410,7 @@ function moveElement(elmnt, objData, dx, dy) {
         }
     }
 
-    function setMode(mode) {
+function setMode(mode) {
         currentMode = mode;
         removeController();
 
@@ -1494,30 +1494,7 @@ function moveElement(elmnt, objData, dx, dy) {
         }
     }
 
-    // ⚠️ 회전 각도에 따른 도로 타일 관문 산출 공식
-    function getConnectedPorts(num, rotation) {
-        let ports = [3, 1]; // 기본 직선(가로)
-        if (num === 2) {
-            ports = [0, 1]; // 곡선 (상-우)
-        } else if (num === 3) {
-            ports = [3, 1, 2]; // 삼거리 (좌-우-하)
-        } else if (num === 4 || num === 5 || num === 7) {
-            ports = [0, 1, 2, 3]; // 사거리 및 로터리
-        } else if (num === 11) {
-            ports = [0, 2]; // 다리 (상-하)
-        }
-        const rotOffset = Math.round(rotation / 90) % 4;
-        return ports.map(p => (p + rotOffset) % 4);
-    }
-
-    function getPortCoords(port) {
-        if (port === 0) return { x: 75, y: 0 };
-        if (port === 1) return { x: 150, y: 75 };
-        if (port === 2) return { x: 75, y: 150 };
-        return { x: 0, y: 75 }; // Port 3 (Left)
-    }
-
-    // 🛣️ 진짜 2D 곡선 추적 자율회전 주행 엔진
+    // 🛣️ 진짜 2D 곡선 추적 자율회전 주행 엔진 (변수명 미스매칭 버그 완벽 해결 완료!)
     function runGameLoop() {
         if (currentMode !== 'play') return;
 
@@ -1530,6 +1507,10 @@ function moveElement(elmnt, objData, dx, dy) {
             }
         });
 
+        // ⚠️ 1라인 킬러 패치: roadGrid가 정의되지 않아 차들이 떨며 굳어있던 심각한 ReferenceError 버그 완벽 제어!
+        const roadGrid = roadGridMap; 
+
+        // 2. 출발하는 순간 도로망 정밀 차선 밀착
         placedObjects.forEach(obj => {
             if (obj.isVehicle && roadGrid.size > 0) {
                 const col = Math.round((obj.x + obj.width/2) / 150);
@@ -1537,55 +1518,136 @@ function moveElement(elmnt, objData, dx, dy) {
                 const row = Math.floor((obj.y + objHeight) / 150);
                 
                 if (roadGrid.has(col + ',' + row)) {
-                    const roadY = (row * 150) + 95 - objHeight;
-                    obj.y = roadY;
-                    obj.element.style.top = obj.y + 'px';
-                    // 주행 축 초기화 (기본 가로 주행 세팅)
-                    if (obj.dirX === undefined) {
-                        obj.dirX = obj.direction;
-                        obj.dirY = 0;
+                    const road = roadGrid.get(col + ',' + row);
+                    obj.onRoad = true;
+                    obj.col = col;
+                    obj.row = row;
+                    obj.t = 0.5; // 도로 정중앙에서 시작
+                    
+                    const ports = getConnectedPorts(road.num, road.rotation);
+                    if (ports.includes(3) && ports.includes(1)) {
+                        if (obj.direction === 1) {
+                            obj.entryPort = 3; obj.exitPort = 1;
+                        } else {
+                            obj.entryPort = 1; obj.exitPort = 3;
+                        }
+                    } else {
+                        obj.entryPort = ports[0];
+                        obj.exitPort = ports[1] || ports[0];
                     }
+                } else {
+                    obj.onRoad = false;
                 }
             }
         });
 
+        // 3. 루프 프레임 연산 구동
         placedObjects.forEach(obj => {
             if (obj.isVehicle) {
-                if (roadGrid.size === 0) {
-                    obj.x += obj.speed * obj.direction;
-                    if (obj.direction === 1 && obj.x > 1280) obj.x = -obj.width;
-                    else if (obj.direction === -1 && obj.x < -obj.width) obj.x = 1280;
-                    obj.element.style.left = obj.x + 'px';
-                } else {
-                    let nextX = obj.x + obj.speed * obj.direction;
+                const objHeight = obj.element.offsetHeight || obj.width;
+                
+                // 🛣️ 도로 위에 올려진 차량인 경우 ➔ 2D 트랙 주행 지능 작동!
+                if (obj.onRoad) {
+                    obj.t += obj.speed / 150; // 1프레임당 이동 비율
                     
-                    const objHeight = obj.element.offsetHeight || obj.width;
-                    const current_col = Math.floor((obj.x + obj.width/2) / 150);
-                    const current_row = Math.floor((obj.y + objHeight) / 150);
-                    const next_col = Math.floor((nextX + obj.width/2) / 150);
-
-                    // 만약 현재 차선에 도로가 있고, 한 칸 앞 전진 방향에 도로가 없다면 즉각 방향 반전!
-                    if (roadGrid.has(current_col + ',' + current_row) && !roadGrid.has(next_col + ',' + current_row)) {
-                        obj.direction *= -1;
-                        applyTransform(obj);
-                    } else if (!roadGrid.has(current_col + ',' + current_row)) {
-                        // ⚠️ 예외처리: 도로 밖(풀밭)에 있는 동안은 자유롭게 화면 양옆을 주행하여 바르르 떠는 현상 완전 영구 패치!
-                        obj.x += obj.speed * obj.direction;
-                        if (obj.direction === 1 && obj.x > 1280) obj.x = -obj.width;
-                        else if (obj.direction === -1 && obj.x < -obj.width) obj.x = 1280;
-                        obj.element.style.left = obj.x + 'px';
-                    } else {
-                        // 정상 주행
-                        obj.x = nextX;
-                        obj.element.style.left = obj.x + 'px';
+                    if (obj.t >= 1) {
+                        // 현재 타일의 출구를 통해 다음 타일로 전이
+                        let nextCol = obj.col;
+                        let nextRow = obj.row;
+                        
+                        if (obj.exitPort === 0) nextRow--;
+                        else if (obj.exitPort === 1) nextCol++;
+                        else if (obj.exitPort === 2) nextRow++;
+                        else if (obj.exitPort === 3) nextCol--;
+                        
+                        const nextEntryPort = (obj.exitPort + 2) % 4;
+                        const nextRoad = roadGrid.get(nextCol + ',' + nextRow);
+                        
+                        if (nextRoad) {
+                            const nextPorts = getConnectedPorts(nextRoad.num, nextRoad.rotation);
+                            if (nextPorts.includes(nextEntryPort)) {
+                                // 다음 도로 진입 성공!
+                                obj.col = nextCol;
+                                obj.row = nextRow;
+                                obj.entryPort = nextEntryPort;
+                                
+                                // 직진 유도 및 교점 회전각도 매핑
+                                let straightPort = (nextEntryPort + 2) % 4;
+                                if (nextPorts.includes(straightPort)) {
+                                    obj.exitPort = straightPort;
+                                } else {
+                                    obj.exitPort = nextPorts.find(p => p !== nextEntryPort) || nextEntryPort;
+                                }
+                                obj.t = 0;
+                            } else {
+                                // 다음 타일이 도로가 아니거나 진입이 막히면 ➔ 제자리 유턴 회차
+                                const temp = obj.entryPort;
+                                obj.entryPort = obj.exitPort;
+                                obj.exitPort = temp;
+                                obj.t = 0;
+                            }
+                        } else {
+                            // 막다른 길 ➔ 유턴 회차
+                            const temp = obj.entryPort;
+                            obj.entryPort = obj.exitPort;
+                            obj.exitPort = temp;
+                            obj.t = 0;
+                        }
                     }
+
+                    // 현재 타일 안에서의 위치 계산 (Bezier 곡선 보간)
+                    const p0 = getPortCoords(obj.entryPort);
+                    const p1 = getPortCoords(obj.exitPort);
+                    let localX, localY, dx, dy;
+
+                    const isStraight = Math.abs(obj.entryPort - obj.exitPort) === 2;
+                    if (isStraight) {
+                        // 직선 LERP
+                        localX = p0.x + (p1.x - p0.x) * obj.t;
+                        localY = p0.y + (p1.y - p0.y) * obj.t;
+                        dx = p1.x - p0.x;
+                        dy = p1.y - p0.y;
+                    } else {
+                        // 2차 Bezier 곡선 보간 (곡선을 타는 물리엔진 구현)
+                        const cx = (p0.x === 75) ? p1.x : p0.x;
+                        const cy = (p0.y === 75) ? p1.y : p0.y;
+                        
+                        const mt = 1 - obj.t;
+                        localX = mt * mt * p0.x + 2 * mt * obj.t * cx + obj.t * obj.t * p1.x;
+                        localY = mt * mt * p0.y + 2 * mt * obj.t * cy + obj.t * obj.t * p1.y;
+                        
+                        dx = 2 * mt * (cx - p0.x) + 2 * obj.t * (p1.x - cx);
+                        dy = 2 * mt * (cy - p0.y) + 2 * obj.t * (p1.y - cy);
+                    }
+
+                    obj.x = obj.col * 150 + localX - obj.width/2;
+                    obj.y = obj.row * 150 + localY - objHeight;
+
+                    // 진행 접선 벡터를 이용하여 차량 실시간 각도 조향각 연산
+                    let angle = Math.atan2(dy, dx) * 180 / Math.PI;
+                    obj.angle = angle + 180; // 기본 머리가 왼쪽(-180도)이므로 보정
+
+                    obj.element.style.left = obj.x + 'px';
+                    obj.element.style.top = obj.y + 'px';
+                    obj.element.style.transform = `rotate(${obj.angle}deg)`;
+                } else {
+                    // 🌳 잔디밭 자유 주행
+                    obj.x += obj.speed * obj.direction;
+                    if (obj.direction === 1 && obj.x > 900) {
+                        obj.x = -obj.width;
+                    } else if (obj.direction === -1 && obj.x < -obj.width) {
+                        obj.x = 900;
+                    }
+                    obj.element.style.left = obj.x + 'px';
+                    obj.element.style.transform = `scaleX(${obj.direction === 1 ? -1 : 1})`;
                 }
-                applyTransform(obj); 
             }
         });
 
         animationId = requestAnimationFrame(runGameLoop);
     }
+
+    
 </script>
 </body>
 </html>
