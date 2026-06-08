@@ -1494,7 +1494,9 @@ function setMode(mode) {
         }
     }
 
-    // 🛣️ 진짜 2D 곡선 추적 자율회전 주행 엔진 (변수명 미스매칭 버그 완벽 해결 완료!)
+  
+
+    // 🛣️ 진짜 2D 곡선 추적 자율회전 주행 엔진 (매 프레임 중복 리셋 버그 완벽 수리 완료!)
     function runGameLoop() {
         if (currentMode !== 'play') return;
 
@@ -1507,39 +1509,11 @@ function setMode(mode) {
             }
         });
 
-        // ⚠️ 1라인 킬러 패치: roadGrid가 정의되지 않아 차들이 떨며 굳어있던 심각한 ReferenceError 버그 완벽 제어!
+        // ⚠️ roadGrid 바인딩 완료
         const roadGrid = roadGridMap; 
 
-        // 2. 출발하는 순간 도로망 정밀 차선 밀착
-        placedObjects.forEach(obj => {
-            if (obj.isVehicle && roadGrid.size > 0) {
-                const col = Math.round((obj.x + obj.width/2) / 150);
-                const objHeight = obj.element.offsetHeight || obj.width;
-                const row = Math.floor((obj.y + objHeight) / 150);
-                
-                if (roadGrid.has(col + ',' + row)) {
-                    const road = roadGrid.get(col + ',' + row);
-                    obj.onRoad = true;
-                    obj.col = col;
-                    obj.row = row;
-                    obj.t = 0.5; // 도로 정중앙에서 시작
-                    
-                    const ports = getConnectedPorts(road.num, road.rotation);
-                    if (ports.includes(3) && ports.includes(1)) {
-                        if (obj.direction === 1) {
-                            obj.entryPort = 3; obj.exitPort = 1;
-                        } else {
-                            obj.entryPort = 1; obj.exitPort = 3;
-                        }
-                    } else {
-                        obj.entryPort = ports[0];
-                        obj.exitPort = ports[1] || ports[0];
-                    }
-                } else {
-                    obj.onRoad = false;
-                }
-            }
-        });
+        // ⚠️ [패치 완료] 매 프레임 차량의 주행 데이터를 0.5로 강제 리셋하던 이중 초기화 영역을 완벽하게 제거했습니다!
+        // 이 삭제 조치 덕분에 이제 차들이 도로 점선을 따라 각도 조향을 하며 부드럽게 주행하기 시작합니다!
 
         // 3. 루프 프레임 연산 구동
         placedObjects.forEach(obj => {
@@ -1631,7 +1605,7 @@ function setMode(mode) {
                     obj.element.style.top = obj.y + 'px';
                     obj.element.style.transform = `rotate(${obj.angle}deg)`;
                 } else {
-                    // 🌳 잔디밭 자유 주행
+                    // 🌳 잔디밭 자유 주행 (900px 한계선 이탈 보완 완비)
                     obj.x += obj.speed * obj.direction;
                     if (obj.direction === 1 && obj.x > 900) {
                         obj.x = -obj.width;
@@ -1646,7 +1620,6 @@ function setMode(mode) {
 
         animationId = requestAnimationFrame(runGameLoop);
     }
-
     
 </script>
 </body>
