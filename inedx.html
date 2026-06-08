@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>스케치 고! 우리 동네</title>
+    <style>
+        /* 기본 레이아웃 세팅 */
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+        body, html { width: 100%; height: 100%; background-color: #222; overflow: hidden; font-family: 'Arial', sans-serif; }
+        
+        /* 중앙 정렬 및 반응형 최적화 강화 */
+        #game-container {
+            width: 1280px;
+            height: 720px;
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%) scale(1);
+            transform-origin: center center; /* 화면 정중앙 기준 축 고정 */
+            background-color: #4E7730;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            overflow: hidden;
+        }
+
+        /* 1. 오프닝 대기 화면 */
+        #title-screen {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image: url('main.png');
+            background-size: cover;
+            background-position: center;
+            z-index: 10;
+            transition: opacity 0.5s ease-out;
+            overflow: hidden;
+        }
+
+        /* ☀️ 손그림 해님의 둥실둥실 맥박 및 느린 자전 회전 애니메이션 (부모 wrapper 분리로 회전/크기 충돌 영구 수리) */
+        .sun-wrapper {
+            position: absolute;
+            top: 10px; 
+            left: 110px; 
+            width: 105px;
+            height: 105px;
+            pointer-events: none;
+            z-index: 11;
+            transform-origin: center center;
+            animation: rotateSlow 35s infinite linear; /* 부모는 회전만 담당 */
+        }
+        .crayon-sun {
+            width: 100%;
+            height: auto;
+            transform-origin: center center;
+            animation: sunPulse 2.5s infinite alternate ease-in-out; /* 자식은 크기만 담당 */
+        }
+
+        /* ✨ 손그림 별들의 반짝임 애니메이션 */
+        .crayon-star {
+            position: absolute;
+            height: auto;
+            pointer-events: none;
+            z-index: 11;
+            transform-origin: center center;
+            animation: twinkle 1.5s infinite alternate ease-in-out;
+        }
+        .star-pink { width: 33px; top: 110px; left: 330px; animation-delay: 0.2s; }
+        .star-yellow { width: 33px; top: 80px; left: 730px; animation-delay: 0.6s; }
+        .star-blue { width: 23px; top: 185px; left: 270px; animation-delay: 1.0s; }
+
+        /* 시작하기 버튼 */
+        #start-button {
+            position: absolute;
+            left: 50%;
+            top: 48.5%; 
+            transform: translate(-50%, -50%);
+            padding: 10px 30px; 
+            font-size: 18px; 
+            font-weight: bold;
+            color: #333;
+            background: linear-gradient(135deg, #FFEB3B, #FFC107);
+            border: 3px solid #333;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 6px 15px rgba(0,0,0,0.3);
+            animation: startButtonBounce 1.2s infinite alternate ease-in-out;
+            z-index: 12;
+        }
+
+        /* 첫 화면용 따뜻한 놀이 설명 카드 */
+        #title-description {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 720px;
+            background: rgba(255, 255, 255, 0.92);
+            border: 3px solid #333;
+            border-radius: 20px;
+            padding: 12px 25px;
+            text-align: center;
+            font-size: 15px;
+            font-weight: bold;
+            color: #333;
+            line-height: 1.5;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.25);
+            z-index: 12;
+        }
+        #title-description span { color: #E53935; }
+
+        /* 2. 실제 플레이 화면 */
+        #play-screen {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: none;
+            background-color: #4E7730;
+        }
+
+        /* 상단 가이드 바 */
+        #guide-bar {
+            position: absolute;
+            left: 280px;
+            top: 15px;
+            right: 20px;
+            height: 50px;
+            background: rgba(255, 255, 255, 0.95);
+            border: 3px solid #333;
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            font-size: 15px;
+            font-weight: bold;
+            color: #333;
+            z-index: 5;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+        }
+        #guide-character { font-size: 24px; margin-right: 10px; }
+
+        /* 왼쪽 에셋 사이드바 */
+        #sidebar {
+            position: absolute;
+            left: 20px;
+            top: 20px;
+            width: 240px;
+            height: 680px;
+            background: rgba(255, 255, 255, 0.95);
+            border: 3px solid #333;
+            border-radius: 15px;
+            display: flex;
+            flex-direction: column;
+            z-index: 6;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        .tab-menu {
+            display: flex;
+            background: #e0e0e0;
+            border-top-left-radius: 11px;
+            border-top-right-radius: 11px;
+            border-bottom: 2px solid #333;
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 12px 2px;
+            font-size: 13px;
+            font-weight: bold;
+            border: none;
+            background: none;
+            cursor: pointer;
+            color: #555;
+        }
+        .tab-btn.active {
+            background: white;
+            color: #111;
+            border-top-left-radius: 11px;
+            border-top-right-radius: 11px;
+        }
+        #asset-list {
+            flex: 1;
+            padding: 12px;
+            overflow-y: auto;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            align-content: start;
+        }
+        .sidebar-item {
+            width: 100%;
+            aspect-ratio: 1/1;
+            border: 2px dashed #999;
+            border-radius: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: grab;
+            background: white;
+            padding: 6px;
+        }
+
+        .sidebar-item img {
+            max-width: 70%;
+            max-height: 70%;
+            object-fit: contain;
+            pointer-events: none;
+        }
+
+        /* 하단 제어 바 */
+        #upload-box {
+            padding: 12px;
+            border-top: 2px solid #ddd;
+            background: #f9f9f9;
+            border-bottom-left-radius: 11px;
+            border-bottom-right-radius: 11px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .action-btn {
+            width: 100%;
+            padding: 8px;
+            font-size: 12px;
+            font-weight: bold;
+            border: 2px solid #333;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 5px;
+        }
+        #btn-upload { background: #E3F2FD; color: #1565C0; }
+        #btn-save { background: #E8F5E9; color: #2E7D32; }
+        #btn-load { background: #FFF3E0; color: #E65100; }
+        #btn-reset { background: #FFEBEE; color: #C62828; }
+
+        /* 🟨 이미지 4의 가이드대로 가로 900px × 세로 600px 계획판으로 격리 축소 구현 */
+        #map-canvas {
+            position: absolute;
+            left: 280px;
+            top: 80px;
+            width: 900px; /* 150px * 6칸 */
+            height: 600px; /* 150px * 4칸 */
+            background-color: #7CB342;
+            border: 3px solid #333;
+            border-radius: 12px;
+            background-image: 
+                linear-gradient(#558B2F 2px, transparent 2px),
+                linear-gradient(90deg, #558B2F 2px, transparent 2px);
+            background-size: 150px 150px;
+            transition: background-color 0.3s;
+            overflow: visible;
+        }
+
+        /* 초록불일 때 격자 가이드선 숨기기 */
+        .play-mode #map-canvas {
+            background-color: #4E7730 !important;
+            background-image: none !important;
+        }
+
+        /* 도로 레이어 */
+        .placed-road {
+            position: absolute;
+            width: 150px;
+            height: 150px;
+            cursor: move;
+            z-index: 1;
+        }
+        .placed-road img { width: 100%; height: 100%; pointer-events: none; }
+
+        /* 건물 및 소품 레이어 */
+        .placed-object {
+            position: absolute;
+            cursor: move;
+            transform-origin: bottom center;
+            z-index: 2;
+        }
+        .placed-object img { width: 100%; height: 100%; pointer-events: none; }
+
+        /* 🟨 편집창 정중앙 절대 고정 수립 (회전 시 역회전 공식을 입혀 가려짐이나 뒤집힘 완전 영구 차단!) */
+        .control-panel {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%); /* 정확히 정중앙 */
+            display: flex;
+            background: white;
+            border: 2px solid #333;
+            border-radius: 8px;
+            padding: 3px;
+            gap: 5px;
+            z-index: 100;
+        }
+        .control-btn {
+            width: 26px;
+            height: 26px;
+            font-size: 14px;
+            border: none;
+            border-radius: 4px;
+            background: #eee;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .control-btn:hover { background: #ddd; }
+
+        /* 신호등 조절기 */
+        #traffic-light-controller {
+            position: absolute;
+            right: 20px;
+            bottom: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            border: 3px solid #333;
+            border-radius: 50px;
+            padding: 10px 25px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            z-index: 7;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        .controller-title { font-weight: bold; font-size: 14px; color: #333; }
+        .light-btn {
+            padding: 8px 20px;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 20px;
+            border: 2px solid #333;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        #btn-red { background: #FFCDD2; color: #C62828; }
+        #btn-red.active { background: #E53935; color: white; box-shadow: 0 0 10px #E53935; }
+        #btn-green { background: #C8E6C9; color: #2E7D32; }
+        #btn-green.active { background: #43A047; color: white; box-shadow: 0 0 10px #43A047; }
+
+        /* 팝업 모달 전체 래퍼 */
+        #upload-modal {
+            display: none;
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.6);
+            z-index: 9999 !important; 
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border: 4px solid #333;
+            border-radius: 20px;
+            text-align: center;
+            width: 420px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+        }
+        .modal-title { font-size: 18px; font-weight: bold; color: #333; margin-bottom: 5px; }
+        .modal-btn {
+            padding: 12px;
+            font-size: 15px;
+            font-weight: bold;
+            border: 2px solid #333;
+            border-radius: 10px;
+            cursor: pointer;
+            background: #f5f5f5;
+            transition: background 0.2s;
+        }
+        .modal-btn:hover { background: #eee; }
+
+        /* 다중 목록 불러오기 스크롤 박스 스타일 */
+        #saved-towns-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 180px;
+            overflow-y: auto;
+            margin: 10px 0;
+            padding-right: 5px;
+        }
+        .saved-town-item {
+            width: 100%;
+            padding: 12px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #333;
+            background: #E8F5E9;
+            border: 2px solid #2E7D32;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .saved-town-item:hover { background: #C8E6C9; }
+        .delete-save-btn {
+            background: #FFCDD2;
+            color: #C62828;
+            border: 1.5px solid #C62828;
+            border-radius: 4px;
+            padding: 3px 8px;
+            font-size: 11px;
+            cursor: pointer;
+        }
+
+        /* 🎥 웹캠 스트림 캡처 레이아웃 */
+        #camera-modal {
+            display: none;
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.85);
+            z-index: 10000 !important; 
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        #camera-preview {
+            width: 640px;
+            height: 480px;
+            border: 4px solid white;
+            border-radius: 15px;
+            background: black;
+            transform: scaleX(-1);
+        }
+        .camera-ui-box {
+            margin-top: 15px;
+            display: flex;
+            gap: 15px;
+        }
+        .cam-btn {
+            padding: 12px 30px;
+            font-size: 16px;
+            font-weight: bold;
+            border: 2px solid white;
+            border-radius: 30px;
+            cursor: pointer;
+            color: white;
+            background: #E53935;
+        }
+
+        /* 애니메이션 효과 */
+        @keyframes startButtonBounce { 0% { transform: translate(-50%, -50%) scale(1); } 100% { transform: translate(-50%, -50%) scale(1.04) translateY(-5px); } }
+        @keyframes wiggle { 0%, 100% { transform: rotate(-6deg); } 50% { transform: rotate(6deg); } }
+        @keyframes mini-bounce { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05) translateY(-4px); } }
+        
+        /* 해님 맥박 및 대기화면 반짝이 별 전용 모션 복구 완료 */
+        @keyframes sunPulse { 0% { transform: scale(0.96); } 100% { transform: scale(1.06); } }
+        @keyframes rotateSlow { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes twinkle { 0% { transform: scale(0.82) rotate(-5deg); opacity: 0.35; } 100% { transform: scale(1.18) rotate(10deg); opacity: 1; } }
+
+        .play-mode .character-wiggle { animation: wiggle 0.4s infinite alternate ease-in-out; }
+        .play-mode .vehicle-bounce { animation: mini-bounce 0.3s infinite alternate ease-in-out; }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <!-- 1. 오프닝 대기 화면 (손그림 별들 및 자전 해님 애니메이션 탑재 완료) -->
+    <div id="title-screen">
+        <div class="sun-wrapper">
+            <img class="crayon-sun" src="sun.png" alt="해님">
+        </div>
+        <img class="crayon-star star-pink" src="star_pink.png" alt="핑크별">
+        <img class="crayon-star star-yellow" src="star_yellow.png" alt="노랑별">
+        <img class="crayon-star star-blue" src="star_blue.png" alt="파랑별">
+
+        <button id="start-button" onclick="startGame()">동네 만들기 출발! 🚦</button>
+        <div id="title-description">
+            🎨 <span>스케치 고! 우리 동네</span>에 온 것을 환영해요!<br>내가 직접 그린 집, 자동차, 친구들을 카메라로 찰칵 찍어 올려보세요!<br>도로를 연결하고 멋진 건물을 배치해 세상에 하나뿐인 신나는 우리 동네를 함께 만들어요!
+        </div>
+    </div>
+
+    <!-- 2. 실제 플레이 화면 -->
+    <div id="play-screen">
+        <!-- 상단 가이드 바 -->
+        <div id="guide-bar">
+            <span id="guide-character">👦</span>
+            <span id="guide-text">만들기 모드 🔴 : 왼쪽에서 도로나 건물을 마우스나 손가락으로 끌어당겨 동네를 꾸며요!</span>
+        </div>
+
+        <!-- 메인 지도 보드판 영역 -->
+        <div id="map-canvas" ondragover="allowDrop(event)" ondrop="drop(event)"></div>
+
+        <!-- 왼쪽 에셋 사이드바 -->
+        <div id="sidebar">
+            <div class="tab-menu">
+                <button class="tab-btn active" onclick="switchTab('road')">🛣️ 도로</button>
+                <button class="tab-btn" onclick="switchTab('building')">🏠 건물</button>
+                <button class="tab-btn" onclick="switchTab('decor')">🚗 소품</button>
+            </div>
+            <div id="asset-list"></div>
+            
+            <!-- 제어 상자 (업로드 및 리셋, 저장/불러오기 추가) -->
+            <div id="upload-box">
+                <button id="btn-upload" class="action-btn" onclick="openSourceSelection()"><span style="font-size:14px;">📷</span> 내 그림 올리기</button>
+                <button id="btn-save" class="action-btn" onclick="openSaveModal()"><span style="font-size:14px;">💾</span> 마을 저장하기</button>
+                <button id="btn-load" class="action-btn" onclick="openLoadModal()"><span style="font-size:14px;">📂</span> 저장 마을 불러오기</button>
+                <button id="btn-reset" class="action-btn" onclick="resetTown()"><span style="font-size:14px;">🔄</span> 모두 지우기</button>
+                
+                <input type="file" id="file-input" accept="image/*" style="display:none;" onchange="handleFile(event)">
+                <canvas id="hidden-capture-canvas" style="display:none;" width="640" height="480"></canvas>
+            </div>
+        </div>
+
+        <!-- 우측 하단 신호등 조절기 -->
+        <div id="traffic-light-controller">
+            <span class="controller-title">신호등 🚦</span>
+            <button id="btn-red" class="light-btn active" onclick="setMode('edit')">만들기 🔴</button>
+            <button id="btn-green" class="light-btn" onclick="setMode('play')">출발! 🟢</button>
+        </div>
+    </div>
+
+    <!-- 사진 찍기 / 파일 올리기 선택 및 카테고리 설정 모달 팝업 -->
+    <div id="upload-modal">
+        <!-- 📸 앨범 vs 카메라 선택 화면 -->
+        <div class="modal-content" id="source-selector">
+            <div class="modal-title">📷 그림을 어떻게 올릴까요?</div>
+            <button class="modal-btn" onclick="startWebcam()">📸 카메라로 직접 사진 찍기</button>
+            <button class="modal-btn" onclick="triggerFile()">📂 앨범/파일에서 사진 고르기</button>
+            <button class="modal-btn" style="background:#ddd; margin-top:10px;" onclick="closeModal()">취소</button>
+        </div>
+        
+        <!-- 🎨 업로드 카테고리 분류 선택 화면 -->
+        <div class="modal-content" id="category-selector" style="display:none;">
+            <div class="modal-title">🎨 올린 그림은 어떤 종류인가요?</div>
+            <button class="modal-btn" onclick="saveUploadedItem('building')">🏠 건물 (마을에 세워두기)</button>
+            <button class="modal-btn" onclick="saveUploadedItem('decor')">🚶 사람/꾸미기 (춤추고 돌아다니기)</button>
+            <button class="modal-btn" onclick="saveUploadedItem('vehicle')">🚗 탈것 (도로 위로 쌩쌩 달리기)</button>
+        </div>
+
+        <!-- 💾 모둠 이름을 입력하는 저장 보관창 -->
+        <div class="modal-content" id="save-namer" style="display:none;">
+            <div class="modal-title">💾 마을을 어떤 이름으로 저장할까요?</div>
+            <input type="text" id="save-name-input" placeholder="예: 햇살반, 하늘반, 1모둠" style="padding: 10px; font-size: 16px; border: 2px solid #333; border-radius: 8px; text-align: center; margin-bottom: 5px;">
+            <button class="modal-btn" style="background:#43A047; color:white;" onclick="confirmSaveTown()">저장하기 💾</button>
+            <button class="modal-btn" style="background:#ddd;" onclick="closeModal()">취소</button>
+        </div>
+
+        <!-- 📂 모둠 선택 및 불러오기 목록창 -->
+        <div class="modal-content" id="load-selector" style="display:none;">
+            <div class="modal-title">📂 어떤 모둠의 마을을 불러올까요?</div>
+            <div id="saved-towns-list"></div>
+            <button class="modal-btn" style="background:#ddd;" onclick="closeModal()">취소</button>
+        </div>
+    </div>
+
+    <!-- 🎥 진짜 웹캠 스트림 캡처 레이아웃 -->
+    <div id="camera-modal">
+        <video id="camera-preview" autoplay playsinline></video>
+        <div class="camera-ui-box">
+            <button class="cam-btn" style="background:#43A047;" onclick="captureSnapshot()">📸 찰칵! 찍기</button>
+            <button class="cam-btn" onclick="stopWebcam()">닫기</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    function resizeGame() {
+        const container = document.getElementById('game-container');
+        let scale = Math.min(window.innerWidth / 1280, window.innerHeight / 720);
+        
+        if (scale <= 0.1) scale = 0.5;
+
+        container.style.transform = `translate(-50%, -50%) scale(${scale})`;
+        container.style.left = '50%';
+        container.style.top = '50%';
+        container.style.position = 'absolute';
+    }
+    window.addEventListener('resize', resizeGame);
+    window.addEventListener('load', resizeGame);
+    window.addEventListener('orientationchange', resizeGame);
+
+    const assets = {
+        road: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+        building: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 21, 22],
+        decor: [11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+    };
+
+    let currentTab = 'road';
+    let currentMode = 'edit';
+    let selectedObject = null;
+    let tempUploadSrc = null;
+    let tempUploadBase64 = null; // 중복 let 선언 단 1회 선언으로 버그 완벽 제어
+    const placedObjects = [];
+    let animationId = null;
+    let webcamStream = null;
+
+    let touchDraggedElement = null;
+    let touchdraggedNum = null;
+    let touchdraggedTab = null;
+
+    // ⚠️ 중복 선언 줄을 지우고 딱 한 번만 깔끔하게 선언합니다!
+    const uploadedImages = {};
+    const uploadedImagesData = {};
+
+    function startGame() {
+        const title = document.getElementById('title-screen');
+        title.style.opacity = '0';
+        setTimeout(() => {
+            title.style.display = 'none';
+            document.getElementById('play-screen').style.display = 'block';
+            switchTab('road');
+            resizeGame();
+        }, 500);
+    }
+
+    function switchTab(tab) {
+        currentTab = tab;
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        event.currentTarget.classList.add('active');
+        renderAssetList();
+    }
+
+    function renderAssetList() {
+        const listContainer = document.getElementById('asset-list');
+        listContainer.innerHTML = '';
+        
+        assets[currentTab].forEach(num => {
+            const item = document.createElement('div');
+            item.className = 'sidebar-item';
+            item.draggable = true;
+            item.ondragstart = (e) => drag(e, num, currentTab);
+            
+            item.addEventListener('touchstart', (e) => touchStart(e, num, currentTab), {passive: false});
+            item.addEventListener('touchmove', touchMove, {passive: false});
+            item.addEventListener('touchend', touchEnd, {passive: false});
+
+            const img = document.createElement('img');
+            img.src = getImgSrc(num, currentTab);
+            img.alt = `에셋 ${num}`;
+            
+            item.appendChild(img);
+            listContainer.appendChild(item);
+        });
+    }
+
+    function getImgSrc(num, tab) {
+        if (typeof num === 'string' && num.startsWith('upload_')) {
+            return uploadedImages[num];
+        }
+        return tab === 'road' ? `roads/${num}.png` : `assets/${num}.png`;
+    }
+
+    function drag(ev, num, tab) {
+        ev.dataTransfer.setData("num", num);
+        ev.dataTransfer.setData("tab", tab);
+    }
+
+    // 🟨 수정 4: 이미지 4의 노란 박스(가로 980px × 세로 620px) 안으로 드롭 인식 범위 한정!
+    function allowDrop(ev) {
+        if (currentMode === 'edit') ev.preventDefault();
+    }
+
+    function drop(ev) {
+        ev.preventDefault();
+        const num = ev.dataTransfer.getData("num");
+        const tab = ev.dataTransfer.getData("tab");
+        const rect = document.getElementById('map-canvas').getBoundingClientRect();
+        
+        const container = document.getElementById('game-container');
+        const scale = container.getBoundingClientRect().width / 1280;
+
+        // 마우스 절대 위치 연산을 보드판(map-canvas) 자체 좌표계로 자동 정밀 매핑
+        const x = (ev.clientX - rect.left) / scale;
+        const y = (ev.clientY - rect.top) / scale;
+
+        // 보드판 바깥으로 나가는 예외 처리
+        if (x < 0 || x > 980 || y < 0 || y > 620) return;
+
+        if (tab === 'road') {
+            createRoad(num, x, y);
+        } else {
+            createObject(num, x, y);
+        }
+    }
+
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let isTouchDragging = false;
+
+    // 태블릿 터치 스타트 (드래그 클론을 조기에 생성하지 않고 좌표만 기록)
+    function touchStart(e, num, tab) {
+        if (currentMode !== 'edit') return;
+        touchdraggedNum = num;
+        touchdraggedTab = tab;
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        isTouchDragging = false;
+        touchDraggedElement = null;
+    }
+
+    // 터치 이동 시 스크롤 모션 vs 드래그앤드롭 구분 알고리즘 구동
+    function touchMove(e) {
+        if (currentMode !== 'edit') return;
+        const currentX = e.touches[0].clientX;
+        const currentY = e.touches[0].clientY;
+        const dx = currentX - touchStartX;
+        const dy = currentY - touchStartY;
+
+        // 드래그가 결정되지 않은 상태에서 분석 실행
+        if (!isTouchDragging) {
+            // 오른쪽(맵) 방향 가로 드래그 거리가 세로 스크롤 거리보다 클 때만 드래그 모드 활성화!
+            if (dx > 15 && Math.abs(dx) > Math.abs(dy)) {
+                isTouchDragging = true;
+                
+                // 그제서야 안전하게 날아다닐 이미지 복사본 생성
+                const sidebarItem = e.currentTarget;
+                const imgEl = sidebarItem.querySelector('img');
+                touchDraggedElement = imgEl.cloneNode(true);
+                touchDraggedElement.style.position = 'fixed';
+                touchDraggedElement.style.width = '70px';
+                touchDraggedElement.style.height = '70px';
+                touchDraggedElement.style.opacity = '0.7';
+                touchDraggedElement.style.pointerEvents = 'none';
+                touchDraggedElement.style.zIndex = '1000';
+                document.body.appendChild(touchDraggedElement);
+            }
+        }
+
+        // 드래그가 확정된 상태일 때만 화면 스크롤을 막고 마우스 위치로 이미지 추종
+        if (isTouchDragging && touchDraggedElement) {
+            e.preventDefault(); // 스크롤 차단 작동
+            touchDraggedElement.style.left = (currentX - 35) + 'px';
+            touchDraggedElement.style.top = (currentY - 35) + 'px';
+        }
+    }
+
+    // 드롭 처리
+    function touchEnd(e) {
+        if (isTouchDragging && touchDraggedElement) {
+            const endX = e.changedTouches[0].clientX;
+            const endY = e.changedTouches[0].clientY;
+            
+            const rect = document.getElementById('map-canvas').getBoundingClientRect();
+            const container = document.getElementById('game-container');
+            const scale = container.getBoundingClientRect().width / 1280;
+
+            if (endX >= rect.left && endX <= rect.right && endY >= rect.top && endY <= rect.bottom) {
+                const x = (endX - rect.left) / scale;
+                const y = (endY - rect.top) / scale;
+                
+                // 보드판 영역 경계 검사 (600px 높이 반영)
+                if (x >= 0 && x <= 900 && y >= 0 && y <= 600) {
+                    if (touchdraggedTab === 'road') {
+                        createRoad(touchdraggedNum, x, y);
+                    } else {
+                        createObject(touchdraggedNum, x, y);
+                    }
+                }
+            }
+            touchDraggedElement.remove();
+        }
+        touchDraggedElement = null;
+        isTouchDragging = false;
+    }
+    
+    function createRoad(num, x, y, savedData = null) {
+        const objId = savedData ? savedData.id : 'road_' + Date.now();
+        const wrapper = document.createElement('div');
+        wrapper.className = 'placed-road';
+        wrapper.id = objId;
+
+        const gridX = savedData ? savedData.x : Math.round((x - 75) / 150) * 150;
+        const gridY = savedData ? savedData.y : Math.round((y - 75) / 150) * 150;
+
+        wrapper.style.left = gridX + 'px';
+        wrapper.style.top = gridY + 'px';
+
+        const img = document.createElement('img');
+        img.src = getImgSrc(num, 'road');
+        wrapper.appendChild(img);
+
+        const roadData = {
+            id: objId,
+            num: Number(num),
+            element: wrapper,
+            isRoad: true,
+            rotation: savedData ? savedData.rotation : 0,
+            scaleX: savedData ? savedData.scaleX : 1,
+            x: gridX,
+            y: gridY
+        };
+
+        wrapper.onclick = (e) => {
+            e.stopPropagation();
+            if (currentMode === 'edit') showController(roadData);
+        };
+
+        document.getElementById('map-canvas').appendChild(wrapper);
+        applyTransform(roadData);
+        placedObjects.push(roadData);
+    }
+
+    function createObject(num, x, y, savedData = null) {
+        const objId = savedData ? savedData.id : 'obj_' + Date.now();
+        const wrapper = document.createElement('div');
+        wrapper.className = 'placed-object';
+        wrapper.id = objId;
+        
+        let width = 85; 
+        let isVehicle = false;
+        let isPerson = false;
+
+        if (typeof num === 'string' && num.startsWith('upload_')) {
+            const type = num.split('_')[1];
+            if (type === 'vehicle') isVehicle = true;
+            else if (type === 'decor') isPerson = true;
+        } else {
+            isVehicle = [11, 12, 13, 14, 15].includes(Number(num));
+            isPerson = [19, 20].includes(Number(num));
+        }
+
+        if (isVehicle) width = 70; 
+        else if (isPerson) width = 40; 
+
+        const finalX = savedData ? savedData.x : (x - width/2);
+        const finalY = savedData ? savedData.y : (y - width);
+
+        wrapper.style.width = width + 'px';
+        wrapper.style.left = finalX + 'px';
+        wrapper.style.top = finalY + 'px';
+
+        const img = document.createElement('img');
+        img.src = getImgSrc(num, isVehicle ? 'decor' : 'building');
+        wrapper.appendChild(img);
+
+        const objData = {
+            id: objId,
+            num: num,
+            element: wrapper,
+            width: width,
+            rotation: savedData ? savedData.rotation : 0,
+            scaleX: savedData ? savedData.scaleX : 1,
+            isVehicle: isVehicle,
+            isPerson: isPerson,
+            x: finalX,
+            y: finalY,
+            baseDirection: -1, 
+            speed: isVehicle ? (Math.random() * 0.4 + 0.5) : 0, 
+            direction: savedData ? savedData.direction : 1
+        };
+
+        wrapper.onclick = (e) => {
+            e.stopPropagation();
+            if (currentMode === 'edit') showController(objData);
+        };
+
+        makeDraggable(wrapper, objData);
+        document.getElementById('map-canvas').appendChild(wrapper);
+        applyTransform(objData);
+        placedObjects.push(objData);
+        sortDepths(); 
+    }
+
+    function makeDraggable(elmnt, objData) {
+        let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+        
+        elmnt.onmousedown = dragMouseDown;
+        elmnt.ontouchstart = dragTouchStart;
+
+        function dragMouseDown(e) {
+            if (currentMode !== 'edit') return;
+            removeController();
+            e.preventDefault();
+            pos3 = e.clientX;
+            pos4 = e.clientY;
+            document.onmouseup = closeDragElement;
+            document.onmousemove = elementDrag;
+        }
+
+        function elementDrag(e) {
+            e.preventDefault();
+            pos1 = pos3 - e.clientX;
+            pos2 = pos4 - e.clientY;
+            pos3 = e.clientX;
+            pos4 = e.clientY;
+            moveElement(elmnt, objData, pos1, pos2);
+        }
+
+        function closeDragElement() {
+            document.onmouseup = null;
+            document.onmousemove = null;
+            sortDepths();
+        }
+
+        function dragTouchStart(e) {
+            if (currentMode !== 'edit') return;
+            removeController();
+            pos3 = e.touches[0].clientX;
+            pos4 = e.touches[0].clientY;
+            
+            elmnt.ontouchend = closeTouchDrag;
+   
