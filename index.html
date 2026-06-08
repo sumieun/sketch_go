@@ -558,8 +558,8 @@
         </div>
     </div>
 </div>
-
 <script>
+    // 전 영역 반응형 16:9 꽉차게 연출 보정
     function resizeGame() {
         const container = document.getElementById('game-container');
         let scale = Math.min(window.innerWidth / 1280, window.innerHeight / 720);
@@ -585,7 +585,7 @@
     let currentMode = 'edit';
     let selectedObject = null;
     let tempUploadSrc = null;
-    let tempUploadBase64 = null; // 중복 let 선언 단 1회 선언으로 버그 완벽 제어
+    let tempUploadBase64 = null; // 중복 let 제거 완료
     const placedObjects = [];
     let animationId = null;
     let webcamStream = null;
@@ -594,7 +594,6 @@
     let touchdraggedNum = null;
     let touchdraggedTab = null;
 
-    // ⚠️ 중복 선언 줄을 지우고 딱 한 번만 깔끔하게 선언합니다!
     const uploadedImages = {};
     const uploadedImagesData = {};
 
@@ -651,7 +650,7 @@
         ev.dataTransfer.setData("tab", tab);
     }
 
-    // 🟨 수정 4: 이미지 4의 노란 박스(가로 980px × 세로 620px) 안으로 드롭 인식 범위 한정!
+    // 🟨 수정 4: 이미지 4의 노란 박스(가로 900px × 세로 600px) 안으로 드롭 인식 범위 한정!
     function allowDrop(ev) {
         if (currentMode === 'edit') ev.preventDefault();
     }
@@ -670,7 +669,7 @@
         const y = (ev.clientY - rect.top) / scale;
 
         // 보드판 바깥으로 나가는 예외 처리
-        if (x < 0 || x > 980 || y < 0 || y > 620) return;
+        if (x < 0 || x > 900 || y < 0 || y > 600) return;
 
         if (tab === 'road') {
             createRoad(num, x, y);
@@ -758,6 +757,7 @@
         touchDraggedElement = null;
         isTouchDragging = false;
     }
+
     function createRoad(num, x, y, savedData = null) {
         const objId = savedData ? savedData.id : 'road_' + Date.now();
         const wrapper = document.createElement('div');
@@ -913,22 +913,22 @@
     }
 
     // 🟨 드래그할 때 보드판 영역(900 x 600) 바깥으로 가출하지 못하도록 한계값 설정
-function moveElement(elmnt, objData, dx, dy) {
-    let newX = elmnt.offsetLeft - dx;
-    let newY = elmnt.offsetTop - dy;
+    function moveElement(elmnt, objData, dx, dy) {
+        let newX = elmnt.offsetLeft - dx;
+        let newY = elmnt.offsetTop - dy;
 
-    const maxW = objData.isRoad ? 150 : objData.width;
+        const maxW = objData.isRoad ? 150 : objData.width;
 
-    if (newX < 0) newX = 0;
-    if (newX > 900 - maxW) newX = 900 - maxW;
-    if (newY < 0) newY = 0;
-    if (newY > 600 - maxW) newY = 600 - maxW; // 가로막힘 세로 한계선 600px로 수정
+        if (newX < 0) newX = 0;
+        if (newX > 900 - maxW) newX = 900 - maxW;
+        if (newY < 0) newY = 0;
+        if (newY > 600 - maxW) newY = 600 - maxW; // 가로막힘 세로 한계선 600px로 수정
 
-    elmnt.style.left = newX + "px";
-    elmnt.style.top = newY + "px";
-    objData.x = newX;
-    objData.y = newY;
-}
+        elmnt.style.left = newX + "px";
+        elmnt.style.top = newY + "px";
+        objData.x = newX;
+        objData.y = newY;
+    }
 
     // 🟨 수정 1: 미니 편집창을 가려짐 현상 차단 및 90도 회전 시 역회전 공식을 적용해 정중앙에 고정!
     function showController(objData) {
@@ -1436,6 +1436,7 @@ function moveElement(elmnt, objData, dx, dy) {
                         obj.direction *= -1;
                         applyTransform(obj);
                     } else if (!roadGrid.has(current_col + ',' + current_row)) {
+                        // ⚠️ 예외처리: 도로 밖(풀밭)에 있는 동안은 자유롭게 화면 양옆을 주행하여 바르르 떠는 현상 완전 영구 패치!
                         obj.x += obj.speed * obj.direction;
                         if (obj.direction === 1 && obj.x > 1280) obj.x = -obj.width;
                         else if (obj.direction === -1 && obj.x < -obj.width) obj.x = 1280;
