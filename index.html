@@ -621,6 +621,9 @@
     let touchdraggedNum = null;
     let touchdraggedTab = null;
 
+        // ⚠️ 자율주행 방향 축 초기화 변수 추가
+    const uploadedImages = {};
+
     const uploadedImages = {};
     const uploadedImagesData = {};
 
@@ -1409,10 +1412,11 @@ function moveElement(elmnt, objData, dx, dy) {
         }
     }
 
-    // 🛣️ 가이드 맵 그리드 상에 놓인 도로 추적 및 끊긴 길 자율 회차
+    // 🛣️ 2D 도로 추적 및 90도 코너링 자율 회전 주행 물리 엔진
     function runGameLoop() {
         if (currentMode !== 'play') return;
 
+        // 1. 현재 배치된 도로 맵 정보 탐색 및 캐싱
         const roadGrid = new Set();
         placedObjects.forEach(o => {
             if (o.isRoad) {
@@ -1422,10 +1426,10 @@ function moveElement(elmnt, objData, dx, dy) {
             }
         });
 
+        // 2. 출발하는 순간 도로망 정밀 차선 밀착
         placedObjects.forEach(obj => {
             if (obj.isVehicle && roadGrid.size > 0) {
                 const col = Math.round((obj.x + obj.width/2) / 150);
-                // ⚠️ 개체의 실제 물리적 렌더링 높이(offsetHeight)를 가져와 세로 칸을 정확히 계산! ( aspect ratio 버그 및 미스매칭 차단 )
                 const objHeight = obj.element.offsetHeight || obj.width;
                 const row = Math.floor((obj.y + objHeight) / 150);
                 
@@ -1433,40 +1437,86 @@ function moveElement(elmnt, objData, dx, dy) {
                     const roadY = (row * 150) + 95 - objHeight;
                     obj.y = roadY;
                     obj.element.style.top = obj.y + 'px';
+                    // 주행 축 초기화 (기본 가로 주행 세팅)
+                    if (obj.dirX === undefined) {
+                        obj.dirX = obj.direction;
+                        obj.dirY = 0;
+                    }
                 }
             }
         });
 
+        // 3. 루프 프레임 연산 구동
         placedObjects.forEach(obj => {
             if (obj.isVehicle) {
-                if (roadGrid.size === 0) {
-                    obj.x += obj.speed * obj.direction;
-                    if (obj.direction === 1 && obj.x > 1280) obj.x = -obj.width;
-                    else if (obj.direction === -1 && obj.x < -obj.width) obj.x = 1280;
-                    obj.element.style.left = obj.x + 'px';
-                } else {
-                    let nextX = obj.x + obj.speed * obj.direction;
-                    
-                    const objHeight = obj.element.offsetHeight || obj.width;
-                    const current_col = Math.floor((obj.x + obj.width/2) / 150);
-                    const current_row = Math.floor((obj.y + objHeight) / 150);
-                    const next_col = Math.floor((nextX + obj.width/2) / 150);
+                const objHeight = obj.element.offsetHeight || obj.width;
+                const col = Math.floor((obj.x + obj.width/2) / 150);
+                const row = Math.floor((obj.y + objHeight) / 150);
 
-                    // 만약 현재 차선에 도로가 있고, 한 칸 앞 전진 방향에 도로가 없다면 즉각 방향 반전!
-                    if (roadGrid.has(current_col + ',' + current_row) && !roadGrid.has(next_col + ',' + current_row)) {
-                        obj.direction *= -1;
-                        applyTransform(obj);
-                    } else if (!roadGrid.has(current_col + ',' + current_row)) {
-                        // ⚠️ 예외처리: 도로 밖(풀밭)에 있는 동안은 자유롭게 화면 양옆을 주행하여 바르르 떠는 현상 완전 영구 패치!
-                        obj.x += obj.speed * obj.direction;
-                        if (obj.direction === 1 && obj.x > 1280) obj.x = -obj.width;
-                        else if (obj.direction === -1 && obj.x < -obj.width) obj.x = 1280;
-                        obj.element.style.left = obj.x + 'px';
-                    } else {
-                        // 정상 주행
-                        obj.x = nextX;
-                        obj.element.style.left = obj.x + 'px';
+                // 🛣️ 도로 위에 올려진 차량인 경우 ➔ 2D 트랙 주행 지능 작동!
+                if (roadGrid.has(col + ',' + row)) {
+                    if (obj.dirX === undefined) {
+                        obj.dirX = obj.direction;
+                        obj.dirY = 0;
                     }
+
+                    // 차 이동
+                    obj.x += obj.speed * obj.dirX;
+                    obj.y += obj.speed * obj.dirY;
+
+                    // 현재 타일의 가로세로 중심 교점 좌표 계산
+                    const centerX = col * 150 + 75 - obj.width/2;
+                    const centerY = row * 150 + 95 - objHeight;
+
+                    // 교점 반경 근처에 오면 길찾기 센서 작동 및 드리프트 정렬
+                    const dist = Math.sqrt(Math.pow(obj.x - centerX, 2) + Math.pow(obj.y - centerY, 2));
+                    if (dist < obj.speed * 1.5) {
+                        obj.x = centerX;
+                        obj.y = centerY;
+
+                        let nextCol = col + obj.dirX;
+                        let nextRow = row + obj.dirY;
+
+                        // 앞길이 막혀있을 때 코너링 방향 탐색
+                        if (!roadGrid.has(nextCol + ',' + nextRow)) {
+                            let turned = false;
+                            if (obj.dirX !== 0) {
+                                // 가로로 가던 중 막히면 ➔ 세로(위아래) 방향에 도로가 있는지 검사 후 커브 선회
+                                if (roadGrid.has(col + ',' + (row + 1))) {
+                                    obj.dirX = 0; obj.dirY = 1; turned = true;
+                                } else if (roadGrid.has(col + ',' + (row - 1))) {
+                                    obj.dirX = 0; obj.dirY = -1; turned = true;
+                                }
+                            } else if (obj.dirY !== 0) {
+                                // 세로로 가던 중 막히면 ➔ 가로(좌우) 방향에 도로가 있는지 검사 후 커브 선회
+                                if (roadGrid.has((col + 1) + ',' + row)) {
+                                    obj.dirX = 1; obj.dirY = 0; turned = true;
+                                } else if (roadGrid.has((col - 1) + ',' + row)) {
+                                    obj.dirX = -1; obj.dirY = 0; turned = true;
+                                }
+                            }
+                            // 사방이 다 막힌 막다른 골목이면 ➔ 제자리 유턴 회차!
+                            if (!turned) {
+                                obj.dirX *= -1;
+                                obj.dirY *= -1;
+                            }
+                        }
+                    }
+                    obj.element.style.left = obj.x + 'px';
+                    obj.element.style.top = obj.y + 'px';
+
+                    // 주행 상태의 스케일 방향 자동 전이
+                    if (obj.dirX !== 0) obj.direction = obj.dirX;
+                } else {
+                    // 🌳 잔디밭 풀숲 위에 놓인 차인 경우 ➔ 가로축 자유 유영 주행 (900px 보드 테두리 이탈방지 보완완료!)
+                    obj.x += obj.speed * obj.direction;
+                    if (obj.direction === 1 && obj.x > 900) {
+                        obj.x = -obj.width;
+                    } else if (obj.direction === -1 && obj.x < -obj.width) {
+                        obj.x = 900;
+                    }
+                    obj.element.style.left = obj.x + 'px';
+                    obj.dirX = undefined; // 주행축 초기화
                 }
                 applyTransform(obj); 
             }
