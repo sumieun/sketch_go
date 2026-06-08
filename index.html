@@ -70,6 +70,11 @@
         .star-yellow { width: 33px; top: 80px; left: 730px; animation-delay: 0.6s; }
         .star-blue { width: 23px; top: 185px; left: 270px; animation-delay: 1.0s; } /* 스 글씨 왼쪽 옆 정밀 배치 완료 */
 
+        /* 🎬 오프닝 해님/반짝이 구동 전용 애니메이션 정의문 추가 완료 */
+        @keyframes sunPulse { 0% { transform: scale(0.96); } 100% { transform: scale(1.06); } }
+        @keyframes rotateSlow { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes twinkle { 0% { transform: scale(0.82) rotate(-5deg); opacity: 0.35; } 100% { transform: scale(1.18) rotate(10deg); opacity: 1; } }
+
         /* 시작하기 버튼 (문구 틈새 공간 안으로 쏙 들어가도록 배치 완료) */
         #start-button {
             position: absolute;
@@ -237,23 +242,23 @@
         #btn-save { background: #E8F5E9; color: #2E7D32; }
         #btn-load { background: #FFF3E0; color: #E65100; }
         #btn-reset { background: #FFEBEE; color: #C62828; }
-
-        /* 🟨 이미지 4의 가이드대로 맵 보드를 황금 영역(가로 900px × 세로 450px)으로 완전 격리 설계! */
+        
+                /* 🟨 이미지 4의 가이드대로 맵 보드를 황금 영역(가로 900px × 세로 450px)으로 완전 격리 설계! */
         #map-canvas {
             position: absolute;
             left: 280px;
             top: 80px;
-            width: 900px; /* 정확히 150px 6칸 크기 */
-            height: 450px; /* 정확히 150px 3칸 크기 */
-            background-color: #7CB342; /* 가이드용 연두색 배경 */
-            border: 3px solid #333; /* 보드 테두리선 추가로 완성도 극대화 */
+            width: 900px; /* 150px * 6칸 */
+            height: 600px; /* 150px * 4칸 (기존 450px에서 600px로 상향 수정) */
+            background-color: #7CB342;
+            border: 3px solid #333;
             border-radius: 12px;
             background-image: 
                 linear-gradient(#558B2F 2px, transparent 2px),
                 linear-gradient(90deg, #558B2F 2px, transparent 2px);
-            background-size: 150px 150px; /* 가이드 눈금을 150px 타일 크기로 완벽하게 일치시킴 */
+            background-size: 150px 150px;
             transition: background-color 0.3s;
-            overflow: visible; /* 미니 편집창이 보드 위로 탈출해 다 보일 수 있도록 설정 */
+            overflow: visible;
         }
 
         /* 초록불일 때 격자 가이드선 숨기기 */
@@ -700,59 +705,85 @@
         }
     }
 
+let touchStartX = 0;
+    let touchStartY = 0;
+    let isTouchDragging = false;
+
+    // 태블릿 터치 스타트 (드래그 클론을 조기에 생성하지 않고 좌표만 기록)
     function touchStart(e, num, tab) {
         if (currentMode !== 'edit') return;
         touchdraggedNum = num;
         touchdraggedTab = tab;
-
-        const imgEl = e.currentTarget.querySelector('img');
-        touchDraggedElement = imgEl.cloneNode(true);
-        touchDraggedElement.style.position = 'fixed';
-        touchDraggedElement.style.width = '70px';
-        touchDraggedElement.style.height = '70px';
-        touchDraggedElement.style.opacity = '0.7';
-        touchDraggedElement.style.pointerEvents = 'none';
-        touchDraggedElement.style.zIndex = '1000';
-        touchDraggedElement.style.left = (e.touches[0].clientX - 35) + 'px';
-        touchDraggedElement.style.top = (e.touches[0].clientY - 35) + 'px';
-        document.body.appendChild(touchDraggedElement);
-    }
-
-    function touchMove(e) {
-        if (!touchDraggedElement) return;
-        e.preventDefault();
-        touchDraggedElement.style.left = (e.touches[0].clientX - 35) + 'px';
-        touchDraggedElement.style.top = (e.touches[0].clientY - 35) + 'px';
-    }
-
-    function touchEnd(e) {
-        if (!touchDraggedElement) return;
-        
-        const endX = e.changedTouches[0].clientX;
-        const endY = e.changedTouches[0].clientY;
-        
-        const rect = document.getElementById('map-canvas').getBoundingClientRect();
-        const container = document.getElementById('game-container');
-        const scale = container.getBoundingClientRect().width / 1280;
-
-        if (endX >= rect.left && endX <= rect.right && endY >= rect.top && endY <= rect.bottom) {
-            const x = (endX - rect.left) / scale;
-            const y = (endY - rect.top) / scale;
-            
-            // 보드판 영역 경계 검사
-            if (x >= 0 && x <= 980 && y >= 0 && y <= 620) {
-                if (touchdraggedTab === 'road') {
-                    createRoad(touchdraggedNum, x, y);
-                } else {
-                    createObject(touchdraggedNum, x, y);
-                }
-            }
-        }
-
-        touchDraggedElement.remove();
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        isTouchDragging = false;
         touchDraggedElement = null;
     }
 
+    // 터치 이동 시 스크롤 모션 vs 드래그앤드롭 구분 알고리즘 구동
+    function touchMove(e) {
+        if (currentMode !== 'edit') return;
+        const currentX = e.touches[0].clientX;
+        const currentY = e.touches[0].clientY;
+        const dx = currentX - touchStartX;
+        const dy = currentY - touchStartY;
+
+        // 드래그가 결정되지 않은 상태에서 분석 실행
+        if (!isTouchDragging) {
+            // 오른쪽(맵) 방향 가로 드래그 거리가 세로 스크롤 거리보다 클 때만 드래그 모드 활성화!
+            if (dx > 15 && Math.abs(dx) > Math.abs(dy)) {
+                isTouchDragging = true;
+                
+                // 그제서야 안전하게 날아다닐 이미지 복사본 생성
+                const sidebarItem = e.currentTarget;
+                const imgEl = sidebarItem.querySelector('img');
+                touchDraggedElement = imgEl.cloneNode(true);
+                touchDraggedElement.style.position = 'fixed';
+                touchDraggedElement.style.width = '70px';
+                touchDraggedElement.style.height = '70px';
+                touchDraggedElement.style.opacity = '0.7';
+                touchDraggedElement.style.pointerEvents = 'none';
+                touchDraggedElement.style.zIndex = '1000';
+                document.body.appendChild(touchDraggedElement);
+            }
+        }
+
+        // 드래그가 확정된 상태일 때만 화면 스크롤을 막고 마우스 위치로 이미지 추종
+        if (isTouchDragging && touchDraggedElement) {
+            e.preventDefault(); // 스크롤 차단 작동
+            touchDraggedElement.style.left = (currentX - 35) + 'px';
+            touchDraggedElement.style.top = (currentY - 35) + 'px';
+        }
+    }
+
+    // 드롭 처리
+    function touchEnd(e) {
+        if (isTouchDragging && touchDraggedElement) {
+            const endX = e.changedTouches[0].clientX;
+            const endY = e.changedTouches[0].clientY;
+            
+            const rect = document.getElementById('map-canvas').getBoundingClientRect();
+            const container = document.getElementById('game-container');
+            const scale = container.getBoundingClientRect().width / 1280;
+
+            if (endX >= rect.left && endX <= rect.right && endY >= rect.top && endY <= rect.bottom) {
+                const x = (endX - rect.left) / scale;
+                const y = (endY - rect.top) / scale;
+                
+                // 보드판 영역 경계 검사 (600px 높이 반영)
+                if (x >= 0 && x <= 900 && y >= 0 && y <= 600) {
+                    if (touchdraggedTab === 'road') {
+                        createRoad(touchdraggedNum, x, y);
+                    } else {
+                        createObject(touchdraggedNum, x, y);
+                    }
+                }
+            }
+            touchDraggedElement.remove();
+        }
+        touchDraggedElement = null;
+        isTouchDragging = false;
+    }
     function createRoad(num, x, y, savedData = null) {
         const objId = savedData ? savedData.id : 'road_' + Date.now();
         const wrapper = document.createElement('div');
@@ -907,23 +938,23 @@
         }
     }
 
-    // 🟨 드래그할 때 보드판 영역(980 x 620) 바깥으로 가출하지 못하도록 한계값 설정
-    function moveElement(elmnt, objData, dx, dy) {
-        let newX = elmnt.offsetLeft - dx;
-        let newY = elmnt.offsetTop - dy;
+    // 🟨 드래그할 때 보드판 영역(900 x 600) 바깥으로 가출하지 못하도록 한계값 설정
+function moveElement(elmnt, objData, dx, dy) {
+    let newX = elmnt.offsetLeft - dx;
+    let newY = elmnt.offsetTop - dy;
 
-        const maxW = objData.isRoad ? 150 : objData.width;
+    const maxW = objData.isRoad ? 150 : objData.width;
 
-        if (newX < 0) newX = 0;
-        if (newX > 980 - maxW) newX = 980 - maxW;
-        if (newY < 0) newY = 0;
-        if (newY > 620 - maxW) newY = 620 - maxW;
+    if (newX < 0) newX = 0;
+    if (newX > 900 - maxW) newX = 900 - maxW;
+    if (newY < 0) newY = 0;
+    if (newY > 600 - maxW) newY = 600 - maxW; // 가로막힘 세로 한계선 600px로 수정
 
-        elmnt.style.left = newX + "px";
-        elmnt.style.top = newY + "px";
-        objData.x = newX;
-        objData.y = newY;
-    }
+    elmnt.style.left = newX + "px";
+    elmnt.style.top = newY + "px";
+    objData.x = newX;
+    objData.y = newY;
+}
 
     // 🟨 수정 1: 미니 편집창을 가려짐 현상 차단 및 90도 회전 시 역회전 공식을 적용해 정중앙에 고정!
     function showController(objData) {
